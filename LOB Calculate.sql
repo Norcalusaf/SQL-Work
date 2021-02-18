@@ -1,128 +1,101 @@
-CREATE PROCEDURE SCHEMA.ZPR_SPH_LINE_OF_BALANCE_BASE_DATA_CALCULATE LANGUAGE SQLSCRIPT AS 
+/**************************************************************************
+Description: Line of Balance Data Set
+***************************************************************************/
 CURSOR result FOR
 (
 			SELECT DISTINCT
-            "Date"
-   			 FROM "SCHEMA"."ZTB_SPH_LINE_OF_BALANCE_BASE" 
-   			 Where "Date" > CURRENT_DATE
-   			 ORDER BY "Date" ASC
+            z_DATE
+   			 FROM SCHEMA.LOB 
+   			 Where z_DATE > CURRENT_DATE
+   			 ORDER BY z_DATE ASC
 );     
-
 BEGIN
 
-/*************************************************************
-Job: This builds out the balance of the Line of Balance
-
-Description: 
-This procedure calculates the running totals. It uses a cursor
-on the date to loop over each date ASC until it has calculated
-the entire running total. This calculates the actual ending 
-balance and the scheduled ending balance
-
-Author: Chris Wilson
-Date: 12/6/19
-*************************************************************/
-
-
---End of Day Actual for first date
-UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-SET A."On_Hand_End_Actual" = 
+UPDATE SCHEMA.LOB A
+SET A.END_ACTUAL = 
 (
-	(A."On_Hand_Start_Actual" + A."ASN_Incoming" + A."Forecast_Incoming") 
-  - (A."Production_Requirements" + A."Sales_Requirements")
-)WHERE "Date" = CURRENT_DATE;
+	(A.START_ACTUAL + A.IN_TRANSIT + A.FORECASTED) 
+  - (A.REQUIREMENT_A + A.REQUIREMENT_B)
+)WHERE z_DATE = CURRENT_DATE;
 
-
---Schedule End of Date for First date
-UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-SET A."On_Hand_End_Sch" = 
+UPDATE SCHEMA.LOB A
+SET A.END_SCHEDULE = 
 (
-	(A."On_Hand_Start_Sch" + A."PO_Incoming_Discrete" + A."PO_Incoming_MinMax") 
-  - (A."Production_Requirements" + A."Sales_Requirements")
-)WHERE "Date" = CURRENT_DATE;
+	(A.START_SCHEDULE + A.FORECASTED) 
+  - (A.REQUIREMENT_A + A.REQUIREMENT_B)
+)WHERE z_DATE = CURRENT_DATE;
 
---No ASN, Actual running LOB from Today forward
-UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-SET A."No_ASN_End" = 
+UPDATE SCHEMA.LOB A
+SET A.NO_FORECAST_END = 
 (
-	(A."No_ASN_Start") - (A."Production_Requirements" + A."Sales_Requirements")
-)WHERE "Date" = CURRENT_DATE;
+	(A.NO_FORECAST_START) - (A.REQUIREMENT_A + A.REQUIREMENT_B)
+)WHERE z_DATE = CURRENT_DATE;
 
---No ASN, Actual running LOB from Today forward for QA orders
-UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-SET A."No_ASN_End_QA" = 
+UPDATE SCHEMA.LOB A
+SET A.NO_FORECAST_END_V2 = 
 (
-	(A."No_ASN_Start_QA") - (A."Production_Requirements_QA")
-)WHERE "Date" = CURRENT_DATE;
+	(A.NO_FORECAST_START_V2) - (A.REQUIREMENTS_V2)
+)WHERE z_DATE = CURRENT_DATE;
 
 
 
 FOR group_row as result DO  --Cursor starts here
 
+    last_result = SELECT DISTINCT ADD_DAYS(z_DATE, 1) as z_DATE, MATERIAL, LOCATION, END_ACTUAL, END_SCHEDULE, NO_FORECAST_END, NO_FORECAST_END_V2 FROM SCHEMA.LOB WHERE z_DATE = ADD_DAYS(:group_row.z_DATE, -1);
 
-last_result = SELECT DISTINCT ADD_DAYS("Date", 1) as "Date", "Part", "Plant","On_Hand_End_Actual", "On_Hand_End_Sch", "No_ASN_End", "No_ASN_End_QA" FROM SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE WHERE "Date" = ADD_DAYS(:group_row."Date", -1);
---Actual Starts
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."On_Hand_Start_Actual" = 
-	(
-		SELECT B."On_Hand_End_Actual" from :last_result B WHERE B."Date" = A."Date" AND B."Part" = A."Part" and B."Plant" = A."Plant"
-	) 
-	WHERE A."Date" = :group_row."Date";
-	
---Schedule Starts
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."On_Hand_Start_Sch" = 
-	(
-		SELECT B."On_Hand_End_Sch" from :last_result B WHERE B."Date" = A."Date" AND B."Part" = A."Part" and B."Plant" = A."Plant"
-	) 
-	WHERE A."Date" = :group_row."Date";
+        UPDATE SCHEMA.LOB A
+        SET A.START_ACTUAL =
+        (
+            SELECT B.END_ACTUAL from :last_result B WHERE B.z_DATE = A.z_DATE AND B.MATERIAL = A.MATERIAL and B.LOCATION = A.LOCATION
+        )
+        WHERE A.z_DATE = :group_row.z_DATE;
 
---No ASN Start
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."No_ASN_Start" = 
-	(
-		SELECT B."No_ASN_End" from :last_result B WHERE B."Date" = A."Date" AND B."Part" = A."Part" and B."Plant" = A."Plant"
-	) 
-	WHERE A."Date" = :group_row."Date";
-	
---No ASN Start QA
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."No_ASN_Start_QA" = 
-	(
-		SELECT B."No_ASN_End_QA" from :last_result B WHERE B."Date" = A."Date" AND B."Part" = A."Part" and B."Plant" = A."Plant"
-	) 
-	WHERE A."Date" = :group_row."Date";
-	
---Actual Ends
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."On_Hand_End_Actual" = 
-	(
-		(A."On_Hand_Start_Actual" + A."ASN_Incoming" + A."Forecast_Incoming")
-	  - (A."Production_Requirements" + A."Sales_Requirements")
-	)WHERE A."Date" = :group_row."Date";
-	
---Schedule Ends
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."On_Hand_End_Sch" = 
-	(
-		(A."On_Hand_Start_Sch" + A."PO_Incoming_Discrete" + A."PO_Incoming_MinMax")
-	  - (A."Production_Requirements" + A."Sales_Requirements")
-	)WHERE A."Date" = :group_row."Date";
+        UPDATE SCHEMA.LOB A
+        SET A.START_SCHEDULE =
+        (
+            SELECT B.END_SCHEDULE from :last_result B WHERE B.z_DATE = A.z_DATE AND B.MATERIAL = A.MATERIAL and B.LOCATION = A.LOCATION
+        )
+        WHERE A.z_DATE = :group_row.z_DATE;
 
---No ASN End
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."No_ASN_End" = 
-	((A."No_ASN_Start") - (A."Production_Requirements" + A."Sales_Requirements")
-	)WHERE A."Date" = :group_row."Date";
-	
-	
---No ASN End QA
-	UPDATE SCHEMA.ZTB_SPH_LINE_OF_BALANCE_BASE A
-	SET A."No_ASN_End_QA" = 
-	((A."No_ASN_Start_QA") - A."Production_Requirements_QA"
-	)WHERE A."Date" = :group_row."Date";
-	
- 
- END FOR;
+        UPDATE SCHEMA.LOB A
+        SET A.NO_FORECAST_START =
+        (
+            SELECT B.NO_FORECAST_END from :last_result B WHERE B.z_DATE = A.z_DATE AND B.MATERIAL = A.MATERIAL and B.LOCATION = A.LOCATION
+        )
+        WHERE A.z_DATE = :group_row.z_DATE;
+
+        UPDATE SCHEMA.LOB A
+        SET A.NO_FORECAST_START_V2 =
+        (
+            SELECT B.NO_FORECAST_END_V2 from :last_result B WHERE B.z_DATE = A.z_DATE AND B.MATERIAL = A.MATERIAL and B.LOCATION = A.LOCATION
+        )
+        WHERE A.z_DATE = :group_row.z_DATE;
+
+        UPDATE SCHEMA.LOB A
+        SET A.END_ACTUAL =
+        (
+            (A.START_ACTUAL + A.IN_TRANSIT + A.FORECASTED)
+          - (A.REQUIREMENT_A + A.REQUIREMENT_B)
+        )WHERE A.z_DATE = :group_row.z_DATE;
+
+        UPDATE SCHEMA.LOB A
+        SET A.END_SCHEDULE =
+        (
+            (A.START_SCHEDULE + A.FORECASTED)
+          - (A.REQUIREMENT_A + A.REQUIREMENT_B)
+        )WHERE A.z_DATE = :group_row.z_DATE;
+
+        UPDATE SCHEMA.LOB A
+        SET A.NO_FORECAST_END =
+        ((A.NO_FORECAST_START) - (A.REQUIREMENT_A + A.REQUIREMENT_B)
+        )WHERE A.z_DATE = :group_row.z_DATE;
+
+        UPDATE SCHEMA.LOB A
+        SET A.NO_FORECAST_END_V2 =
+        ((A.NO_FORECAST_START_V2) - A.REQUIREMENTS_V2
+        )WHERE A.z_DATE = :group_row.z_DATE;
+
+
+END FOR;
  
  END;
