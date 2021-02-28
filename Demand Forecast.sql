@@ -46,7 +46,7 @@ FROM
 	WERKS AS LOCATION, 
 	MATNR as MATERIAL, 
 	BDART as DEMAND_TYPE 
-	FROM DATA_SLT_CERP.RESB 
+	FROM SCHEMA.RESB 
 	WHERE MATNR != '' 
 	AND (ENMNG != BDMNG)
 	AND BDMNG != 0
@@ -69,7 +69,7 @@ while _monthcounter < 19 do  -- loops over this block until counter reaches 19 a
         SET "Current_Month" =
                  (
                      SELECT COALESCE((SUM(BDMNG) - SUM(ENMNG)),0)
-                     FROM DATA_SLT_CERP.RESB
+                     FROM SCHEMA.RESB
                      WHERE (LOCATION = WERKS AND MATERIAL = MATNR AND DEMAND_TYPE = BDART)
                      AND BDTER <= (ADD_DAYS(ADD_MONTHS(ADD_DAYS(CURRENT_DATE,-EXTRACT(DAY FROM CURRENT_DATE) + 1),1),-1))
                      AND SUBSTR(LGORT,0,1) NOT IN (''Q'')
@@ -88,14 +88,14 @@ while _monthcounter < 19 do  -- loops over this block until counter reaches 19 a
                         SELECT VE.WMENG,
                         (
                                 SELECT COALESCE(SUM("LFIMG"),0)
-                                FROM "DATA_SLT_CERP"."LIPS" L
-                                JOIN "DATA_SLT_CERP"."LIKP" LP ON L."VBELN" = LP."VBELN"
+                                FROM "SCHEMA"."LIPS" L
+                                JOIN "SCHEMA"."LIKP" LP ON L."VBELN" = LP."VBELN"
                                 WHERE L."VGBEL" = VP."VBELN" AND L."VGPOS" = VP."POSNR"
                         )as "Withdrawn"
-                        FROM DATA_SLT_CERP.VBAK VA
-                        JOIN DATA_SLT_CERP.VBAP VP ON VA.VBELN = VP.VBELN
-                        JOIN DATA_SLT_CERP.VBUP VU ON VA.VBELN = VU.VBELN AND VP.POSNR = VU.POSNR
-                        JOIN DATA_SLT_CERP.VBEP VE ON VA.VBELN = VE.VBELN AND VP.POSNR = VE.POSNR
+                        FROM SCHEMA.VBAK VA
+                        JOIN SCHEMA.VBAP VP ON VA.VBELN = VP.VBELN
+                        JOIN SCHEMA.VBUP VU ON VA.VBELN = VU.VBELN AND VP.POSNR = VU.POSNR
+                        JOIN SCHEMA.VBEP VE ON VA.VBELN = VE.VBELN AND VP.POSNR = VE.POSNR
                         WHERE (VP.WERKS = LOCATION AND VP.MATNR = MATERIAL AND VP.BEDAE = DEMAND_TYPE)
                         AND VE.MBDAT <= (ADD_DAYS(ADD_MONTHS(ADD_DAYS(CURRENT_DATE,-EXTRACT(DAY FROM CURRENT_DATE) + 1),1),-1))
                         AND VU.GBSTA IN (''A'', ''B'')
@@ -111,7 +111,7 @@ while _monthcounter < 19 do  -- loops over this block until counter reaches 19 a
         SET "Current_Month+'||to_char(:_monthcounter)||'" =
                  (
                      SELECT COALESCE((SUM(BDMNG) - SUM(ENMNG)),0)
-                     FROM DATA_SLT_CERP.RESB
+                     FROM SCHEMA.RESB
                      WHERE (LOCATION = WERKS AND MATERIAL = MATNR AND DEMAND_TYPE = BDART)
                      AND (YEAR(BDTER) = YEAR(ADD_MONTHS(CURRENT_DATE,'||to_char(:_monthcounter)||')) AND MONTH(BDTER) = MONTH(ADD_MONTHS(CURRENT_DATE,'||to_char(:_monthcounter)||')))
                      AND SUBSTR(LGORT,0,1) NOT IN (''Q'')
@@ -130,14 +130,14 @@ while _monthcounter < 19 do  -- loops over this block until counter reaches 19 a
                         SELECT VE.WMENG,
                         (
                                 SELECT COALESCE(SUM("LFIMG"),0)
-                                FROM "DATA_SLT_CERP"."LIPS" L
-                                JOIN "DATA_SLT_CERP"."LIKP" LP ON L."VBELN" = LP."VBELN"
+                                FROM "SCHEMA"."LIPS" L
+                                JOIN "SCHEMA"."LIKP" LP ON L."VBELN" = LP."VBELN"
                                 WHERE L."VGBEL" = VP."VBELN" AND L."VGPOS" = VP."POSNR"
                         )as "Withdrawn"
-                        FROM DATA_SLT_CERP.VBAK VA
-                        JOIN DATA_SLT_CERP.VBAP VP ON VA.VBELN = VP.VBELN
-                        JOIN DATA_SLT_CERP.VBUP VU ON VA.VBELN = VU.VBELN AND VP.POSNR = VU.POSNR
-                        JOIN DATA_SLT_CERP.VBEP VE ON VA.VBELN = VE.VBELN AND VP.POSNR = VE.POSNR
+                        FROM SCHEMA.VBAK VA
+                        JOIN SCHEMA.VBAP VP ON VA.VBELN = VP.VBELN
+                        JOIN SCHEMA.VBUP VU ON VA.VBELN = VU.VBELN AND VP.POSNR = VU.POSNR
+                        JOIN SCHEMA.VBEP VE ON VA.VBELN = VE.VBELN AND VP.POSNR = VE.POSNR
                         WHERE (VP.WERKS = LOCATION AND VP.MATNR = MATERIAL AND VP.BEDAE = DEMAND_TYPE)
                         AND (YEAR(VE.MBDAT) = YEAR(ADD_MONTHS(CURRENT_DATE,'||to_char(:_monthcounter)||')) AND MONTH(VE.MBDAT) = MONTH(ADD_MONTHS(CURRENT_DATE,'||to_char(:_monthcounter)||')))
                         AND VU.GBSTA IN (''A'', ''B'')
